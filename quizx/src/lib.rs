@@ -83,3 +83,4 @@ pub mod simplify;
 pub mod tensor;
 pub mod util;
 pub mod vec_graph;
+pub mod zx2stim;
