@@ -7,7 +7,6 @@ pub mod decompose;
 pub mod scalar;
 pub mod util;
 pub mod vec_graph;
-
 use crate::circuit::to_pyzx_circuit;
 use crate::decompose::Decomposer;
 use crate::scalar::Scalar;
@@ -15,6 +14,8 @@ use crate::vec_graph::VecGraph;
 
 use ::quizx::extract::ExtractError;
 use ::quizx::extract::ToCircuit;
+use ::quizx::graph_loader::load_graph;
+use ::quizx::zx2stim::zx_to_stim;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -27,6 +28,7 @@ fn quizx(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(full_simp, m)?)?;
     m.add_function(wrap_pyfunction!(extract_circuit, m)?)?;
     m.add_function(wrap_pyfunction!(qasm, m)?)?;
+    m.add_function(wrap_pyfunction!(zx2stim_py, m)?)?;
     m.add_class::<VecGraph>()?;
     m.add_class::<Decomposer>()?;
     m.add_class::<Scalar>()?;
@@ -65,4 +67,9 @@ fn extract_circuit(py: Python<'_>, g: &mut VecGraph) -> PyResult<PyObject> {
         Ok(c) => to_pyzx_circuit(py, c),
         Err(ExtractError(s, _, _)) => Err(PyValueError::new_err(s)),
     }
+}
+#[pyfunction]
+fn zx2stim_py(path: &str) -> PyResult<String> {
+    let mut graph = load_graph(path);
+    Ok(zx_to_stim(&mut graph))
 }
