@@ -22,18 +22,19 @@ pub fn zx_to_stim(graph: &Graph) -> String {
     for (_row, nodes) in nodes_by_row {
         for node in nodes {
             // This is all assuming its a bipartite phaseless diagram
-            // stim_lines.push(format!("# node {}", node));
-            // stim_lines.push(format!("Type: {:?}", graph.vertex_type(node)));
             let vtype = graph.vertex_type(node);
             let neighbors: Vec<_> = graph.neighbors(node).collect();
             let qubit = graph.qubit(node);
             let row = graph.row(node);
-            log::debug!("Currently on node {}, qubit {}, row {}, and have neighbors {:?}", node, qubit, row, neighbors);
+            // Wow this dbg!() macro is so much better and more concise
+            dbg!(node, qubit, row, &neighbors);
             match neighbors.len() {
                 1 => {
+                    // One neighbor means either a Z / X measurement or a |0> / |+> preparation,
+                    // depending on where the neighbor is in terms of TICKs
                     let neighbor = neighbors[0];
                     let neighbor_row = graph.row(neighbor);
-                    log::debug!("node row: {}\n neighbor row: {}",row, neighbor_row);
+                    dbg!(row, neighbor_row);
                     if vtype == B {
                         continue;
                     }
@@ -41,16 +42,38 @@ pub fn zx_to_stim(graph: &Graph) -> String {
                             stim_lines.push(format!("H {}", qubit));
                         }
                     if neighbor_row < row {
-                        stim_lines.push(format!("MR {}", qubit))
+                        stim_lines.push(format!("MR {}", qubit));
                     }
+                    // No need to handle the qubit allocation case beyond the H gate,
+                    // since stim dynamically allocates |0> qubits
                 }
-                2 => {}
-                3 => {}
+                2 => {
+                    // Do nothing, phaseless one-input one-output spiders are identities
+                    // Different for e.g. two-input
+                    // or two-output nodes, but stim does not support those as a native
+                    // instruction anyways
+                }
+                3 => {
+                    // This is going to be a CNOT
+                    // Skip if current node is target, 
+                    // will be handled in iteration over control node
+                    if vtype == X {
+                        continue
+                    }
+                    for neighbor in neighbors {
+                        if graph.qubit(neighbor) != qubit {
+                            stim_lines.push
+                            (format!("CNOT {} {}", qubit, graph.qubit(neighbor)));
+                        }
+                    }
+
+
+                }
                 _ => {
                     stim_lines
                     .push
                     (format!("# Unsupported node degree {}: {}", 
-                    neighbors.len(), node))
+                    neighbors.len(), node));
                 }
             }
             
@@ -107,7 +130,7 @@ mod tests {
         .parent()
         .unwrap()
         .join("test_files")
-        .join("simple_meas.zxg");
+        .join("steane_style_steane_2_rounds.zxg");
         let graph = load_graph(path.to_str().unwrap());
         let svg = graph_to_svg(&graph, &[]);
         let outpath = "test_write.svg";
