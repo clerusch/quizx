@@ -5,26 +5,45 @@
 use crate::hash_graph::Graph;
 use crate::graph::GraphLike;
 use crate::detection_webs::{detection_webs, Pauli};
-use crate::graph::VType::{X, Z,B};// H, B};
-use ordered_float::OrderedFloat;
+use crate::graph::VType::{X, Z,B};
 use std::collections::{BTreeMap, HashMap};
+use std::fmt;
+
+/// New struct to avoid unnecessary dependencies
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+pub struct F64(pub f64);
+
+// This is ok as long as we promise the F64s here will not be NaNs, which they shouldnt be 
+// since they're only used for row/qubit parameters
+impl Eq for F64 {}
+
+impl Ord for F64 {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.total_cmp(&other.0)
+    }
+}
+impl fmt::Display for F64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 /// Converts a zx diagram to a stim circuit for qec simulations
 pub fn zx_to_stim(graph: &mut Graph) -> String {
     let mut stim_lines = Vec::new();
-    let mut nodes_by_row: BTreeMap<OrderedFloat<f64>, Vec<usize>> = BTreeMap::new();
+    let mut nodes_by_row: BTreeMap<F64, Vec<usize>> = BTreeMap::new();
     //this is important, since we want to ensure we work with the bipartite form of the graph
     let webs = detection_webs(graph);
 
     // We need to convert the real number float values of qubit to positive integers for stim
-    let mut qubit_values: Vec<OrderedFloat<f64>> = graph
+    let mut qubit_values: Vec<F64> = graph
         .vertices()
-        .map(|v| OrderedFloat(graph.vertex_data(v).qubit))
+        .map(|v| F64(graph.vertex_data(v).qubit))
         .collect();
     qubit_values.sort();
     qubit_values.dedup();
 
-    let qubit_map: BTreeMap<OrderedFloat<f64>, usize> = qubit_values
+    let qubit_map: BTreeMap<F64, usize> = qubit_values
         .into_iter()
         .enumerate()
         .map(|(i, q)| (q, i))
@@ -34,7 +53,7 @@ pub fn zx_to_stim(graph: &mut Graph) -> String {
 
     // Group nodes by row
     for node in graph.vertices() {
-        let row = OrderedFloat(graph.vertex_data(node).row);
+        let row = F64(graph.vertex_data(node).row);
         nodes_by_row.entry(row).or_default().push(node);
     }
 
@@ -44,7 +63,7 @@ pub fn zx_to_stim(graph: &mut Graph) -> String {
             // This is all assuming its a bipartite phaseless diagram
             let vtype = graph.vertex_type(node);
             let neighbors: Vec<_> = graph.neighbors(node).collect();
-            let qubit = OrderedFloat(graph.qubit(node));
+            let qubit = F64(graph.qubit(node));
             let qid = qubit_map[&qubit];
             // Wow this dbg!() macro is so much better and more concise
             // dbg!(node, qubit, row, &neighbors);
@@ -54,7 +73,7 @@ pub fn zx_to_stim(graph: &mut Graph) -> String {
                     // One neighbor means either a Z / X measurement or a |0> / |+> preparation,
                     // depending on where the neighbor is in terms of TICKs
                     let neighbor = neighbors[0];
-                    let neighbor_row = OrderedFloat(graph.row(neighbor));
+                    let neighbor_row = F64(graph.row(neighbor));
                     // dbg!(row, neighbor_row);
                     if vtype == B {
                         continue;
@@ -85,7 +104,7 @@ pub fn zx_to_stim(graph: &mut Graph) -> String {
                         continue
                     }
                     for neighbor in neighbors {
-                        let neighq = OrderedFloat(graph.qubit(neighbor));
+                        let neighq = F64(graph.qubit(neighbor));
                         if  neighq != qubit {
                             stim_lines.push
                             (format!("CNOT {} {} # mapped from qubits {} {}",qid, qubit_map[&neighq], qubit, neighq));
